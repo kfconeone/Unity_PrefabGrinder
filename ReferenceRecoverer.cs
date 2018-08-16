@@ -51,8 +51,9 @@ public class ReferenceRecoverer : MonoBehaviour {
 
     JToken FindObject(string _fieldName,object _object)
     {
+        Debug.Log(_object.GetType());
         //先判斷是不是IEnumrable
-        if (!IsCollectionType(_object.GetType()))
+        if ((_object.GetType().IsAssignableFrom(typeof(Transform)) || _object.GetType().IsAssignableFrom(typeof(RectTransform))) ||!IsCollectionType(_object.GetType()))
         {
             //再判斷是不是struct
             if (_object.GetType().ToString().Contains("+"))
@@ -66,9 +67,9 @@ public class ReferenceRecoverer : MonoBehaviour {
                     JToken token = FindObject(_fieldName + "." + field.Name, fieldObject);
                     if (!token.IsNullOrEmpty())
                     {
-                        tempObject.Add(field.Name,token);
+                        tempObject.Add(field.Name, token);
                     }
-                    
+
                 }
                 return tempObject;
             }
@@ -99,6 +100,21 @@ public class ReferenceRecoverer : MonoBehaviour {
             while (trans != transform)
             {
                 if (trans.parent == transform) break;
+                if (trans.parent == null)
+                {
+                    resultObject.Add("isOutsider", true);
+                    resultObject.Add("outsiderParent", trans.name);
+                    if (path.Contains("/"))
+                    {
+                        path = path.Substring(path.IndexOf("/") + 1);
+                    }
+                    else
+                    {
+                        path = string.Empty;
+
+                    }
+                    break;
+                }
                 trans = trans.parent;
                 path = trans.name + "/" + path;
             }
@@ -112,63 +128,7 @@ public class ReferenceRecoverer : MonoBehaviour {
         return string.Empty;
     }
 
-    
-    //void FindReference()
-    //{
-    //    refPath = new List<string>();
-    //    var fields = monoScript.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance);
-    //    foreach (var field in fields)
-    //    {
-    //        var fieldObject = field.GetValue(monoScript);
-    //        if (fieldObject == null) continue;
-    //        FindObject(field.Name,fieldObject);
-    //    }
-    //}
 
-
-    //void FindObject(string _fieldName,object _object)
-    //{
-    //    //先判斷是不是IEnumrable
-    //    if (!IsCollectionType(_object.GetType()))
-    //    {
-    //        //再判斷是不是struct
-    //        if (_object.GetType().ToString().Contains("+"))
-    //        {
-    //            var fields = _object.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance);
-    //            foreach (var field in fields)
-    //            {
-    //                var fieldObject = field.GetValue(_object);
-    //                if (fieldObject == null) continue;
-    //                FindObject(_fieldName + "." + field.Name ,fieldObject);
-    //            }
-    //            return;
-    //        }
-
-    //    }
-    //    else
-    //    {
-    //        IList objList = (IList)_object;
-    //        foreach (var obj in objList)
-    //        {
-    //            FindObject(_fieldName + "[" + objList.IndexOf(obj).ToString() + "]",obj);
-    //        }
-    //        return;
-    //    }
-    //    Transform trans =  GetTransform(_object);
-    //    if (trans != null)
-    //    {
-    //        string path = trans.name;
-    //        while (trans != transform)
-    //        {
-    //            if (trans.parent == transform) break;
-    //            trans = trans.parent;
-    //            path = trans.name + "/" + path;
-    //        }
-
-    //        refPath.Add(_fieldName + "@" + path + "@" + _object.GetType());
-
-    //    }
-    //}
 
     Transform GetTransform(object _object)
     {
@@ -180,8 +140,6 @@ public class ReferenceRecoverer : MonoBehaviour {
         catch { }
         return t;
     }
-
-
 
     bool IsCollectionType(Type type)
     {

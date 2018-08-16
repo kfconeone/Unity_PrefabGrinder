@@ -89,7 +89,7 @@ public class MenuItems
         var referenceRecoverer = selectedGameObject.GetComponent<ReferenceRecoverer>();
         CreateCSharpFile(referenceRecoverer.monoScript, referenceRecoverer.jsonReference);
 
-        
+
     }
 
     static string GetPrefabName(Transform _root,Transform _obj)
@@ -144,14 +144,14 @@ public class MenuItems
                 Debug.LogError("存在同名物件，取消建立程式碼");
                 return;
             }
-
+            
             using (FileStream fs = File.Create(path))
             {
                 Byte[] info = new UTF8Encoding().GetBytes(codeContent);
                 fs.Write(info, 0, info.Length);
             }
             Debug.Log("成功建立cs檔案：" + scriptName + ".cs");
-            UnityEditor.AssetDatabase.Refresh();
+            AssetDatabase.Refresh();
         }
         catch (Exception ex)
         {
@@ -183,13 +183,27 @@ public class MenuItems
                     getComponentCode = ".GetComponent<" + type + ">()";
                 }
 
-                if (string.IsNullOrEmpty(tempObject.GetValue("path").ToString()))
+                if (string.IsNullOrEmpty(tempObject.GetValue("path").ToString()))   //有可能就是自己
                 {
-                    return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + _root + ".transform" + getComponentCode + ";" + SetEnter(1);
+                    if (tempObject.TryGetValue("isOutsider", out childToken))
+                    {
+                        return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + "GameObject.Find(\"" + tempObject.GetValue("outsiderParent").ToString() + "\")" + ".transform" + getComponentCode + ";" + SetEnter(1);
+                    }
+                    else
+                    {
+                        return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + _root + ".transform" + getComponentCode + ";" + SetEnter(1);
+                    }
                 }
                 else
                 {
-                    return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + _root + ".transform.Find(\"" + tempObject.GetValue("path").ToString() + "\")" + getComponentCode + ";" + SetEnter(1);
+                    if (tempObject.TryGetValue("isOutsider", out childToken))
+                    {
+                        return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + "GameObject.Find(\"" + tempObject.GetValue("outsiderParent").ToString() + "\")"+ ".transform.Find(\"" + tempObject.GetValue("path").ToString() + "\")" + getComponentCode + ";" + SetEnter(1);
+                    }
+                    else
+                    {
+                        return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + _root + ".transform.Find(\"" + tempObject.GetValue("path").ToString() + "\")" + getComponentCode + ";" + SetEnter(1);
+                    }
                 }
             }
             else
