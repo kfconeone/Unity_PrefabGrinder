@@ -45,28 +45,23 @@ public class Testing : MonoBehaviour {
         yield return www.SendWebRequest();
         DownloadHandlerAssetBundle tempAsset = (DownloadHandlerAssetBundle)www.downloadHandler;
         AssetBundle bundle = tempAsset.assetBundle;
-
-        var request = bundle.LoadAssetAsync<GameObject>("pnl_blackjack.prefab");       
-        yield return request;
-
         //以下是讀取
-        GameObject rootPrefab = request.asset as GameObject;
         GrinderAsyncOperation asyncOperation = new GrinderAsyncOperation();
-        yield return asyncOperation.LoadAssetAsync(this,rootPrefab, bundle);
+        yield return asyncOperation.LoadAssetAsync(this, "pnl_blackjack.prefab", bundle);
         //while (!asyncOperation.loadedAsset.isDone)
         //{
         //    Debug.Log("loadingPercent : " + asyncOperation.loadingPercent);
         //    yield return null;
         //}
         //以下是生成
-        yield return asyncOperation.InstantiateAsync(this, rootPrefab,transform, asyncOperation.loadedAsset.prefabsDic);
+        yield return asyncOperation.InstantiateAsync(this, asyncOperation.loadedAsset.prefab, transform, asyncOperation.loadedAsset.prefabsDic);
         //StartCoroutine(asyncOperation.Instantiate(root));
         //while (!asyncOperation.instantiateIsDone)
         //{
         //    Debug.Log("instantiatePercent : " + asyncOperation.instantiatePercent);
         //    yield return null;
         //}
-        asyncOperation.instantiateAsset.root.GetComponent<IApplier>().SetReference();
+        asyncOperation.instantiateAsset.instantiateGameObject.GetComponent<IApplier>().SetReference();
         Debug.Log("結束");
         bundle.Unload(false);
     }
