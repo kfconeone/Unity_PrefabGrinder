@@ -7,10 +7,33 @@ using Newtonsoft.Json.Linq;
 using System.IO;
 using System;
 using Newtonsoft.Json;
+using Kfc.Grinder;
 
-public class MenuItems
+public class GrinderMenuItems : EditorWindow
 {
-    [MenuItem("GameObject/Swap Prefab Create/Create", priority = 0)]
+    [MenuItem("GameObject/Prefab建立/1. 安裝Reference產生器", priority = 0)]
+    static void InstallReferenceRecoverer()
+    {
+        if (Selection.gameObjects.Length < 1)
+        {
+            Debug.Log("未選取物件");
+            return;
+        }
+        GameObject selectedGameObject = Selection.gameObjects[0];
+
+        selectedGameObject.AddComponent<ReferenceRecoverer>();
+        if (selectedGameObject.GetComponents<IApplier>().Length > 0)
+        {
+            foreach (var applier in selectedGameObject.GetComponents<IApplier>())
+            {
+                DestroyImmediate(applier as Component);
+            }
+        }
+
+        Debug.Log("安裝完畢");
+    }
+
+    [MenuItem("GameObject/Prefab建立/2. 建立Ground_Prefab", priority = 1)]
     static void CreatePrefab()
     {
         if (Selection.gameObjects.Length < 1)
@@ -34,8 +57,8 @@ public class MenuItems
         GameObject tempGo = GameObject.Instantiate(selectedGameObject, selectedGameObject.transform.parent);
         tempGo.name = selectedGameObject.name;
         tempGo.SetActive(false);
-        var swapList = tempGo.GetComponentsInChildren(typeof(AssetSwapper),true).Select(tempComponent => tempComponent.gameObject).ToList();
-        
+        var swapList = tempGo.GetComponentsInChildren(typeof(AssetSwapper), true).Select(tempComponent => tempComponent.gameObject).ToList();
+
         foreach (GameObject go in swapList)
         {
             if (go == null)
@@ -43,10 +66,10 @@ public class MenuItems
                 Debug.LogError("物件已被刪除，檢查是否重複Add Component [AssetSwapper]");
                 return;
             }
-            
+
             GameObject swapGo = new GameObject(go.name);
             var swapper = swapGo.AddComponent<AssetSwapper>();
-            swapper.prefabName = GetPrefabName(tempGo.transform,go.transform);
+            swapper.prefabName = GetPrefabName(tempGo.transform, go.transform);
             PrefabUtility.CreatePrefab(PrefabPath + "/Packed/" + swapper.prefabName + ".prefab", go);
             Debug.Log("建立prefab : " + swapper.prefabName + ".prefab");
             swapGo.transform.parent = go.transform.parent;
@@ -58,7 +81,7 @@ public class MenuItems
         Debug.Log("Prefabs建立完畢");
     }
 
-    [MenuItem("GameObject/Swap Prefab Create/ClearSwapper", priority = 0)]
+    [MenuItem("GameObject/Prefab建立/清除物件之下所有AssetSwapper", priority = 15)]
     static void ClearSwapper()
     {
         if (Selection.gameObjects.Length < 1)
@@ -77,8 +100,7 @@ public class MenuItems
         Debug.Log("Asset Swapper清除完畢");
     }
 
-    [MenuItem("GameObject/Reference Recover/GetReference", priority = 0)]
-    static void GetReference()
+    public static void GetReference()
     {
         if (Selection.gameObjects.Length < 1)
         {
@@ -87,12 +109,20 @@ public class MenuItems
         }
         GameObject selectedGameObject = Selection.gameObjects[0];
         var referenceRecoverer = selectedGameObject.GetComponent<ReferenceRecoverer>();
+        if ((referenceRecoverer.monoScript == null || string.IsNullOrEmpty(referenceRecoverer.jsonReference)))
+        {
+            return;
+        }
         CreateCSharpFile(referenceRecoverer.monoScript, referenceRecoverer.jsonReference);
 
-
+        GameObject tempGo = new GameObject("[ReferenceApplyAide]");
+        var aide = tempGo.AddComponent<ReferenceApplyAide>();
+        aide.className = referenceRecoverer.monoScript.GetType().Name + "_ReferenceApplier";
+        aide.go = selectedGameObject;
     }
 
-    static string GetPrefabName(Transform _root,Transform _obj)
+
+    static string GetPrefabName(Transform _root, Transform _obj)
     {
         int level = 0;
         string prefabName = string.Empty;
@@ -114,12 +144,13 @@ public class MenuItems
         return prefabName;
     }
 
-    static void CreateCSharpFile(MonoBehaviour _monoScript,string _jsonReference)
+    static void CreateCSharpFile(MonoBehaviour _monoScript, string _jsonReference)
     {
         string codeContent = string.Empty;
         codeContent = "using UnityEngine;" + SetEnter(2);
-        string path = UnityEditor.AssetDatabase.GetAssetPath(UnityEditor.MonoScript.FromMonoBehaviour(_monoScript));
-
+        //string path = AssetDatabase.GetAssetPath(UnityEditor.MonoScript.FromMonoBehaviour(_monoScript));
+        string path = AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(_monoScript.GetComponent<ReferenceRecoverer>()));
+        path = path.Substring(0, path.LastIndexOf("/")) + "/Reference/";
         JObject jObjReference = JsonConvert.DeserializeObject<JObject>(_jsonReference);
 
         var scriptName = _monoScript.GetType().Name;
@@ -141,10 +172,13 @@ public class MenuItems
         {
             if (File.Exists(path))
             {
-                Debug.LogError("存在同名物件，取消建立程式碼");
-                return;
+                File.Delete(path);
+                File.Delete(path + ".meta");
+                AssetDatabase.Refresh();
+                Debug.LogError("存在同名物件，執行覆蓋");
+
             }
-            
+
             using (FileStream fs = File.Create(path))
             {
                 Byte[] info = new UTF8Encoding().GetBytes(codeContent);
@@ -198,7 +232,7 @@ public class MenuItems
                 {
                     if (tempObject.TryGetValue("isOutsider", out childToken))
                     {
-                        return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + "GameObject.Find(\"" + tempObject.GetValue("outsiderParent").ToString() + "\")"+ ".transform.Find(\"" + tempObject.GetValue("path").ToString() + "\")" + getComponentCode + ";" + SetEnter(1);
+                        return SetTab(2) + "if(" + leftValue + " == null) " + leftValue + " = " + "GameObject.Find(\"" + tempObject.GetValue("outsiderParent").ToString() + "\")" + ".transform.Find(\"" + tempObject.GetValue("path").ToString() + "\")" + getComponentCode + ";" + SetEnter(1);
                     }
                     else
                     {
@@ -248,5 +282,29 @@ public class MenuItems
             tempTab += "\n";
         }
         return tempTab;
+    }
+
+    [InitializeOnLoad]
+    class ReferenceComponentAdder
+    {
+        static ReferenceComponentAdder()
+        {
+            GameObject aideObj = GameObject.Find("[ReferenceApplyAide]");
+            if (aideObj == null) return;
+            try
+            {
+                ReferenceApplyAide aide = aideObj.GetComponent<ReferenceApplyAide>();
+                Debug.Log(ReflectionHelper.GetType(aide.className).Name);
+                aide.go.AddComponent(ReflectionHelper.GetType(aide.className));
+                DestroyImmediate(aide.go.GetComponent<ReferenceRecoverer>());
+
+                Debug.Log("Reference Class附加成功");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("Reference Class附加失敗 : " + e.Message);
+            }
+            DestroyImmediate(aideObj);
+        }
     }
 }
