@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System.Linq;
-using System.Collections.Generic;
+using System.Collections;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.IO;
@@ -11,7 +11,31 @@ using Kfc.Grinder;
 
 public class GrinderMenuItems : EditorWindow
 {
-    [MenuItem("GameObject/Prefab建立/1. 安裝Reference產生器", priority = 0)]
+
+    [MenuItem("GameObject/Prefab建立/1. 將物件設定為Grinder Prefab", priority = 0)]
+    static void SetGameObjectToGrinderPrefab()
+    {
+        if (Selection.gameObjects.Length < 1)
+        {
+            Debug.Log("未選取物件");
+            return;
+        }
+        GameObject selectedGameObject = Selection.gameObjects[0];
+
+        var prefabType = PrefabUtility.GetPrefabType(selectedGameObject);
+        if (prefabType != PrefabType.PrefabInstance)
+        {
+            Debug.LogError("需先設定成 Prefab 物件");
+            return;
+        }
+
+        CustomHierarchyView.grinderPrefabs.Add(PrefabUtility.FindPrefabRoot(selectedGameObject));
+
+        Debug.Log("已設定成Grinder Prefab");
+    }
+
+
+    [MenuItem("GameObject/Prefab建立/2. 安裝Reference產生器", priority = 0)]
     static void InstallReferenceRecoverer()
     {
         if (Selection.gameObjects.Length < 1)
@@ -33,7 +57,7 @@ public class GrinderMenuItems : EditorWindow
         Debug.Log("安裝完畢");
     }
 
-    [MenuItem("GameObject/Prefab建立/2. 建立Ground_Prefab", priority = 1)]
+    [MenuItem("GameObject/Prefab建立/3. 建立Ground_Prefab", priority = 1)]
     static void CreatePrefab()
     {
         if (Selection.gameObjects.Length < 1)
@@ -41,32 +65,45 @@ public class GrinderMenuItems : EditorWindow
             Debug.Log("未選取物件");
             return;
         }
-        GameObject selectedGameObject = Selection.gameObjects[0];
 
-        string PrefabPath = "Assets/Prefab_" + selectedGameObject.name;
+        if (CustomHierarchyView.isErrorExist)
+        {
+            Debug.Log("存在錯誤，取消建立");
+            return;
+        }
+        GameObject selectedPrefabRoot = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+        Swing.Editor.EditorCoroutine.start(Grinding(selectedPrefabRoot));
 
+    }
+
+    static IEnumerator Grinding(GameObject _selectedPrefabRoot)
+    {
+        string PrefabPath = "Assets/Prefab_" + _selectedPrefabRoot.name;
+        
         if (!AssetDatabase.IsValidFolder(PrefabPath))
         {
-            AssetDatabase.CreateFolder("Assets", "Prefab_" + selectedGameObject.name);
+            AssetDatabase.CreateFolder("Assets", "Prefab_" + _selectedPrefabRoot.name);
             AssetDatabase.CreateFolder(PrefabPath, "Origin");
             AssetDatabase.CreateFolder(PrefabPath, "Packed");
         }
 
-        PrefabUtility.CreatePrefab(PrefabPath + "/Origin/" + selectedGameObject.name + ".prefab", selectedGameObject);
+        PrefabUtility.CreatePrefab(PrefabPath + "/Origin/" + _selectedPrefabRoot.name + ".prefab", _selectedPrefabRoot);
 
-        GameObject tempGo = GameObject.Instantiate(selectedGameObject, selectedGameObject.transform.parent);
-        tempGo.name = selectedGameObject.name;
+        GameObject tempGo = GameObject.Instantiate(_selectedPrefabRoot, _selectedPrefabRoot.transform.parent);
+        tempGo.name = _selectedPrefabRoot.name;
         tempGo.SetActive(false);
         var swapList = tempGo.GetComponentsInChildren(typeof(AssetSwapper), true).Select(tempComponent => tempComponent.gameObject).ToList();
 
+        int count = 0;
+        int total = swapList.Count;
         foreach (GameObject go in swapList)
         {
             if (go == null)
             {
                 Debug.LogError("物件已被刪除，檢查是否重複Add Component [AssetSwapper]");
-                return;
+                break;
             }
-
+            string name = go.name;
             GameObject swapGo = new GameObject(go.name);
             var swapper = swapGo.AddComponent<AssetSwapper>();
             swapper.prefabName = GetPrefabName(tempGo.transform, go.transform);
@@ -75,13 +112,19 @@ public class GrinderMenuItems : EditorWindow
             swapGo.transform.parent = go.transform.parent;
             swapGo.transform.SetSiblingIndex(go.transform.GetSiblingIndex());
             UnityEngine.Object.DestroyImmediate(go);
+            yield return null;
+            ++count;
+            EditorUtility.DisplayProgressBar("生成Prefab中", "物件 : " + name, (float)count / (float)total);
+
+
         }
         PrefabUtility.CreatePrefab(PrefabPath + "/Packed/" + tempGo.name + ".prefab", tempGo);
         UnityEngine.Object.DestroyImmediate(tempGo);
-        Debug.Log("Prefabs建立完畢");
+        EditorUtility.ClearProgressBar();
+        Debug.Log("結束");
     }
 
-    [MenuItem("GameObject/Prefab建立/清除物件之下所有AssetSwapper", priority = 15)]
+    [MenuItem("GameObject/Prefab建立/還原物件為普通Prefab", priority = 15)]
     static void ClearSwapper()
     {
         if (Selection.gameObjects.Length < 1)
@@ -90,14 +133,139 @@ public class GrinderMenuItems : EditorWindow
             return;
         }
         GameObject selectedGameObject = Selection.gameObjects[0];
-
-        var components = selectedGameObject.GetComponentsInChildren(typeof(AssetSwapper), true);
-        foreach (Component com in components)
+        if (selectedGameObject.GetComponentsInChildren<AssetSwapper>().Length == 0 && !CustomHierarchyView.grinderPrefabs.Contains(PrefabUtility.FindPrefabRoot(selectedGameObject)))
         {
-            GameObject.DestroyImmediate(com);
+            Debug.Log("並非是Grinder物件");
+            return;
         }
 
-        Debug.Log("Asset Swapper清除完畢");
+        if (EditorUtility.DisplayDialog("還原成普通Prefab", "是否還原？(不可逆)", "確定", "取消"))
+        {
+            var components = PrefabUtility.FindPrefabRoot(selectedGameObject).GetComponentsInChildren(typeof(AssetSwapper), true);
+            foreach (Component com in components)
+            {
+                GameObject.DestroyImmediate(com);
+            }
+
+            if (CustomHierarchyView.grinderPrefabs.Contains(PrefabUtility.FindPrefabRoot(selectedGameObject)))
+            {
+                CustomHierarchyView.grinderPrefabs.Remove(PrefabUtility.FindPrefabRoot(selectedGameObject));
+            }
+
+            Debug.Log("還原完畢");
+        }
+        else
+        {
+            Debug.Log("取消還原");
+        }
+        
+    }
+
+    [MenuItem("GameObject/Prefab建立/選取物件全部變成Swapper(優先選擇兒子，並自動忽略父子中已經為Swapper的物件)", priority = 16)]
+    static void AddSwapperToObjects()
+    {
+        if (Selection.gameObjects.Length < 1)
+        {
+            Debug.Log("未選取物件");
+            return;
+        }
+
+        foreach (GameObject go in Selection.gameObjects)
+        {
+            if (go.GetComponentsInParent<AssetSwapper>().Length > 0)
+            {
+                foreach (var swapper in go.GetComponentsInParent<AssetSwapper>())
+                {
+                    GameObject.DestroyImmediate(swapper);
+                }
+            }
+            go.AddComponent<AssetSwapper>();
+
+        }
+
+        Debug.Log("Swapper設定完畢");
+    }
+
+    [MenuItem("GameObject/Prefab建立/進行Prefab生成效能檢測", priority = 17)]
+    static void InstantiationAnalyze()
+    {
+        if (Selection.gameObjects.Length < 1)
+        {
+            Debug.Log("未選取物件");
+            return;
+        }
+        GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+
+        if (EditorUtility.DisplayDialog("性能檢測", "檢測時間根據prefab大小，相當耗時，確定進行？\n\n父物件權重正規化至1000，其餘子物件則根據父物件進行比對。\n\n檢測結果前者為生成效能，後者為操作效能。", "確定", "取消"))
+        {
+            Swing.Editor.EditorCoroutine.start(Loading(targetPrefab));       
+        }
+        else
+        {
+            Debug.Log("取消還原");
+        }
+
+    }
+
+    static int count;
+    static int total;
+    static IEnumerator Loading(GameObject targetPrefab)
+    {
+        var allPrefabs = targetPrefab.GetComponentsInChildren<Transform>(true);
+        count = 0;
+        total = allPrefabs.Length;
+        float standardToken = 0;
+        float standardToken2 = 0;
+        foreach (var trans in allPrefabs)
+        {
+            System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+            System.Diagnostics.Stopwatch sw2 = new System.Diagnostics.Stopwatch();
+            sw.Start();
+            for (int i = 0; i < 100; ++i)
+            {
+                GameObject go = GameObject.Instantiate(trans.gameObject);
+                GameObject.DestroyImmediate(go);
+            }
+            sw.Stop();
+            float token = sw.Elapsed.Ticks / 100f;
+
+            if (targetPrefab == trans.gameObject)
+            {
+                standardToken = token;
+            }
+            token = token * (1000f / standardToken);
+            double[] tokens = new double[2];
+            tokens[0] = (int)token;
+            
+
+
+            GameObject TempGo = GameObject.Instantiate(trans.gameObject);
+            sw2.Start();
+            for (int j = 0; j < 1000; ++j)
+            {
+                TempGo.transform.position += new Vector3(j, j, j);
+                TempGo.transform.localScale += new Vector3(j, j, j);
+            }
+            sw2.Stop();
+            GameObject.DestroyImmediate(TempGo);
+
+            float token2 = sw2.Elapsed.Ticks / 1000f;
+
+            if (targetPrefab == trans.gameObject)
+            {
+                standardToken2 = token2;
+            }
+            token2 = token2 * (1000f / standardToken2);
+            tokens[1] = (int)token2;
+
+            yield return null;
+            ++count;
+            EditorUtility.DisplayProgressBar("檢測中... (權重誤差根據CPU而異，同物件誤差約為30)", "檢測物件 : " + trans.name, (float)count / (float)total);
+
+            CustomHierarchyView.performances.Put(trans.gameObject, tokens);
+        }
+        Debug.Log("檢測完畢");
+        EditorUtility.ClearProgressBar();
     }
 
     public static void GetReference()

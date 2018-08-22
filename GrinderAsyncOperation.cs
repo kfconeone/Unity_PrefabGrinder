@@ -18,9 +18,41 @@ namespace Kfc.Grinder
             _mono.StartCoroutine(inner_LoadAssetAsync(_assetName, _bundle));
             return this;
         }
+
+        public GrinderAssetBundleAsyncOperation LoadAssetAsyncFromResources(MonoBehaviour _mono, string _assetName, string _path)
+        {
+            _mono.StartCoroutine(inner_LoadAssetAsync(_assetName, _path));
+            return this;
+        }
+
+        IEnumerator inner_LoadAssetAsync(string _assetName, string _path)
+        {
+            var request = Resources.LoadAsync(_assetName);
+            yield return request;
+
+            prefab = request.asset as GameObject;
+
+            var prefabSwapperList = prefab.GetComponentsInChildren<AssetSwapper>();
+            var prefabNameList = prefabSwapperList.Select(tempSwapper => tempSwapper.prefabName).ToList();
+            prefabsDic = new Dictionary<string, GameObject>();
+            progress = 0;
+            int finishCount = 0;
+            isDone = false;
+            int totalDownloadCount = prefabNameList.Count;
+            foreach (string name in prefabNameList)
+            {
+                var req = Resources.LoadAsync(_path + "/" + name);
+                progress = (finishCount + req.progress) / totalDownloadCount;
+                yield return req;
+                ++finishCount;
+                prefabsDic.Add(name, req.asset as GameObject);
+            }
+            isDone = true;
+        }
+
         IEnumerator inner_LoadAssetAsync(string _assetName, AssetBundle _bundle)
         {
-            var request = _bundle.LoadAssetAsync<GameObject>("pnl_blackjack.prefab");
+            var request = _bundle.LoadAssetAsync<GameObject>(_assetName);
             yield return request;
 
             prefab = request.asset as GameObject;
@@ -62,28 +94,6 @@ namespace Kfc.Grinder
             instantiateGameObject = _instantiateGameObject;
             _mono.StartCoroutine(inner_Instantiate(instantiateGameObject, _prefabsDic));
             return this;
-        }
-
-        public GrinderInstantiateAsyncOperation InstantiateAsync(MonoBehaviour _mono, GameObject _instantiateGameObject, string _path)
-        {
-            instantiateGameObject = _instantiateGameObject;
-            _mono.StartCoroutine(inner_InstantiateFromResources(_mono,instantiateGameObject, _path));
-            return this;
-        }
-
-        IEnumerator inner_InstantiateFromResources(MonoBehaviour _mono, GameObject _root, string _path)
-        {
-            var objectSwpapperList = _root.GetComponentsInChildren<AssetSwapper>();
-            var prefabNameList = objectSwpapperList.Select(tempSwapper => tempSwapper.prefabName).ToList();
-            Dictionary<string, GameObject> prefabsDic = new Dictionary<string, GameObject>();
-            foreach (string name in prefabNameList)
-            {
-                var req = Resources.LoadAsync(_path + "/" + name);
-                yield return req;
-                prefabsDic.Add(name, req.asset as GameObject);
-            }
-            _mono.StartCoroutine(inner_Instantiate(instantiateGameObject, prefabsDic));
-
         }
 
 
@@ -143,6 +153,13 @@ namespace Kfc.Grinder
             return loadedAsset;
         }
 
+        public GrinderAssetBundleAsyncOperation LoadAssetAsync(MonoBehaviour _mono, string _assetName, string _path)
+        {
+            loadedAsset = new GrinderAssetBundleAsyncOperation();
+            loadedAsset.LoadAssetAsyncFromResources(_mono, _assetName, _path);
+            return loadedAsset;
+        }
+
         public GrinderInstantiateAsyncOperation InstantiateAsync(MonoBehaviour _mono, GameObject _prefab, Transform _parent, Dictionary<string, GameObject> _prefabsDic)
         {
             instantiateAsset = new GrinderInstantiateAsyncOperation();
@@ -151,13 +168,6 @@ namespace Kfc.Grinder
             return instantiateAsset;
         }
 
-        public GrinderInstantiateAsyncOperation InstantiateFromResoucesAsync(MonoBehaviour _mono, GameObject _prefab, Transform _parent, string path)
-        {
-            instantiateAsset = new GrinderInstantiateAsyncOperation();
-            GameObject instantiateGameObject = GameObject.Instantiate(_prefab, _parent);
-            instantiateAsset.InstantiateAsync(_mono, instantiateGameObject, path);
-            return instantiateAsset;
-        }
     }
 
         //public class GrinderAsyncOperation {
