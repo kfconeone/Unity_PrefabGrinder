@@ -6,7 +6,7 @@ using UnityEngine;
 [InitializeOnLoad]
 public class CustomHierarchyView {
 
-    public static Dictionary<GameObject, double[]> performances = new Dictionary<GameObject, double[]>();
+    public static Dictionary<GameObject, double> performances = new Dictionary<GameObject, double>();
     static List<GameObject> mGrinderPrefabs;
     public static bool isErrorExist;
     delegate void grinderGuiDelegate(int instanceID, Rect selectionRect);
@@ -25,7 +25,7 @@ public class CustomHierarchyView {
 
     static CustomHierarchyView()
     {
-
+        if(performances.Count == 0) EditorUtility.ClearProgressBar();
         EditorApplication.hierarchyWindowItemOnGUI += HierarchyWindowItemOnGUI;
 
 
@@ -78,17 +78,13 @@ public class CustomHierarchyView {
                 string name;
                 if (performances.ContainsKey(hierarchyGameObject))
                 {
-                    string performanceText = performances[hierarchyGameObject][0].ToString();
-                    string performanceText2 = performances[hierarchyGameObject][1].ToString();
-                    if (performances[hierarchyGameObject][0] == 0)
+                    string performanceText = performances[hierarchyGameObject].ToString();
+                    if (performances[hierarchyGameObject] == 0)
                     {
                         performanceText = " < 1";
                     }
-                    if (performances[hierarchyGameObject][1] == 0)
-                    {
-                        performanceText2 = " < 1";
-                    }
-                    name = hierarchyGameObject.name + string.Format("  [{0}]  -  [{1}]", performanceText, performanceText2);
+
+                    name = hierarchyGameObject.name + string.Format("  [{0}]", performanceText);
                 }
                 else
                 {

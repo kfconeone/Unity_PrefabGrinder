@@ -8,6 +8,7 @@ using System.IO;
 using System;
 using Newtonsoft.Json;
 using Kfc.Grinder;
+using UnityEngine.Networking;
 
 public class GrinderMenuItems : EditorWindow
 {
@@ -186,6 +187,27 @@ public class GrinderMenuItems : EditorWindow
         Debug.Log("Swapper設定完畢");
     }
 
+    [MenuItem("GameObject/Prefab建立/進行深度效能檢測(beta)", priority = 17)]
+    static void AssetBundleLoadingAnalyze()
+    {
+        if (Selection.gameObjects.Length < 1)
+        {
+            Debug.Log("未選取物件");
+            return;
+        }
+        GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+
+        if (EditorUtility.DisplayDialog("深度性能檢測", "深度測試非常耗時，確定進行？", "確定", "取消"))
+        {
+            var scrutinizer = new GameObject("[scrutinizer]").AddComponent<Scrutinizer>();
+            Swing.Editor.EditorCoroutine.start(scrutinizer.CreatePrefabs(targetPrefab));
+        }
+        else
+        {
+            Debug.Log("取消檢測");
+        }
+    }
+
     [MenuItem("GameObject/Prefab建立/進行Prefab生成效能檢測", priority = 17)]
     static void InstantiationAnalyze()
     {
@@ -196,75 +218,97 @@ public class GrinderMenuItems : EditorWindow
         }
         GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
 
-        if (EditorUtility.DisplayDialog("性能檢測", "檢測時間根據prefab大小，相當耗時，確定進行？\n\n父物件權重正規化至1000，其餘子物件則根據父物件進行比對。\n\n檢測結果前者為生成效能，後者為操作效能。", "確定", "取消"))
+        if (EditorUtility.DisplayDialog("生成性能檢測", "檢測時間根據prefab大小，有可能需要數分鐘，確定進行？", "確定", "取消"))
         {
-            Swing.Editor.EditorCoroutine.start(Loading(targetPrefab));       
+            Swing.Editor.EditorCoroutine.start(Loading(targetPrefab,0));       
         }
         else
         {
-            Debug.Log("取消還原");
+            Debug.Log("取消檢測");
+        }
+    }
+
+    [MenuItem("GameObject/Prefab建立/進行Prefab操作效能檢測", priority = 17)]
+    static void ManipulateAnalyze()
+    {
+        if (Selection.gameObjects.Length < 1)
+        {
+            Debug.Log("未選取物件");
+            return;
+        }
+        GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+
+        if (EditorUtility.DisplayDialog("操作性能檢測", "檢測時間根據prefab大小，有可能需要數分鐘，確定進行？", "確定", "取消"))
+        {
+            Swing.Editor.EditorCoroutine.start(Loading(targetPrefab,1));
+        }
+        else
+        {
+            Debug.Log("取消檢測");
         }
 
     }
 
     static int count;
     static int total;
-    static IEnumerator Loading(GameObject targetPrefab)
+    static IEnumerator Loading(GameObject targetPrefab,int _type)
     {
         var allPrefabs = targetPrefab.GetComponentsInChildren<Transform>(true);
         count = 0;
         total = allPrefabs.Length;
         float standardToken = 0;
-        float standardToken2 = 0;
+        EditorUtility.DisplayProgressBar("檢測中...0% (同物件權重誤差約為30)", "檢測物件 : " + "開始掃描Prefab", (float)count / (float)total);
+
         foreach (var trans in allPrefabs)
         {
             System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-            System.Diagnostics.Stopwatch sw2 = new System.Diagnostics.Stopwatch();
+
             sw.Start();
-            for (int i = 0; i < 100; ++i)
+            if (_type == 0)
+            {
+                for (int i = 0; i < 100; ++i)
+                {
+                    GameObject go = GameObject.Instantiate(trans.gameObject);
+                    GameObject.DestroyImmediate(go);
+                    
+                }
+            }
+            else if (_type == 1)
             {
                 GameObject go = GameObject.Instantiate(trans.gameObject);
+                for (int i = 0; i < 10000; ++i)
+                {
+                    go.transform.localScale += new Vector3(i,i,i);
+                    go.transform.localPosition += new Vector3(i, i, i);
+                    go.transform.localEulerAngles += new Vector3(i, i, i);
+                }
                 GameObject.DestroyImmediate(go);
             }
+            
             sw.Stop();
-            float token = sw.Elapsed.Ticks / 100f;
+            float token = 0;
+            if (_type == 0)
+            { 
+                token = sw.Elapsed.Ticks / 100f;
+            }
+            else if (_type == 1)
+            {
+                token = sw.Elapsed.Ticks / 10000f;
+            }
 
             if (targetPrefab == trans.gameObject)
             {
                 standardToken = token;
             }
             token = token * (1000f / standardToken);
-            double[] tokens = new double[2];
-            tokens[0] = (int)token;
-            
-
-
-            GameObject TempGo = GameObject.Instantiate(trans.gameObject);
-            sw2.Start();
-            for (int j = 0; j < 1000; ++j)
-            {
-                TempGo.transform.position += new Vector3(j, j, j);
-                TempGo.transform.localScale += new Vector3(j, j, j);
-            }
-            sw2.Stop();
-            GameObject.DestroyImmediate(TempGo);
-
-            float token2 = sw2.Elapsed.Ticks / 1000f;
-
-            if (targetPrefab == trans.gameObject)
-            {
-                standardToken2 = token2;
-            }
-            token2 = token2 * (1000f / standardToken2);
-            tokens[1] = (int)token2;
-
             yield return null;
-            ++count;
-            EditorUtility.DisplayProgressBar("檢測中... (權重誤差根據CPU而異，同物件誤差約為30)", "檢測物件 : " + trans.name, (float)count / (float)total);
+            ++count; 
+            EditorUtility.DisplayProgressBar(string.Format("檢測中...{0}% (同物件權重誤差約為30)", (((float)count * 100) / (float)total).ToString("f1")), "檢測物件 : " + trans.name, (float)count / (float)total);
 
-            CustomHierarchyView.performances.Put(trans.gameObject, tokens);
+            CustomHierarchyView.performances.Put(trans.gameObject, (int)token);
         }
         Debug.Log("檢測完畢");
+        Resources.UnloadUnusedAssets();
         EditorUtility.ClearProgressBar();
     }
 
@@ -457,6 +501,7 @@ public class GrinderMenuItems : EditorWindow
     {
         static ReferenceComponentAdder()
         {
+            
             GameObject aideObj = GameObject.Find("[ReferenceApplyAide]");
             if (aideObj == null) return;
             try
@@ -473,6 +518,98 @@ public class GrinderMenuItems : EditorWindow
                 Debug.LogError("Reference Class附加失敗 : " + e.Message);
             }
             DestroyImmediate(aideObj);
+        }
+    }
+
+
+    [InitializeOnLoad]
+    class ScrutinizeAssetBundle
+    {
+        static ScrutinizeAssetBundle()
+        {
+            if (GameObject.Find("[scrutinizer]") == null) return;
+            Scrutinizer scrutinizer = GameObject.Find("[scrutinizer]").GetComponent<Scrutinizer>();
+            Debug.Log(scrutinizer.assetBundlePath);
+
+            string url = "file://" + scrutinizer.assetBundlePath;
+            Swing.Editor.EditorCoroutine.start(Download(scrutinizer, url));
+        }
+
+        static IEnumerator Download(Scrutinizer _scrutinizer,string _url)
+        {
+            
+            var www = UnityWebRequest.GetAssetBundle(_url);
+
+            yield return www.SendWebRequest();
+            DownloadHandlerAssetBundle tempAsset = (DownloadHandlerAssetBundle)www.downloadHandler;
+            AssetBundle bundle = tempAsset.assetBundle;
+
+            int count = 0;
+            int total = bundle.GetAllAssetNames().Length;
+            float standardToken = 0;
+            EditorUtility.DisplayProgressBar("檢測中...0% (同物件權重誤差約為30)", "檢測物件 : " + "開始掃描Prefab", (float)count / (float)total);
+
+
+
+            System.Diagnostics.Stopwatch swRoot = new System.Diagnostics.Stopwatch();
+            swRoot.Start();
+            for (int i = 0; i < 100; ++i)
+            {
+                var loadedAssetRoot = bundle.LoadAsset<GameObject>(_scrutinizer.targetPrefabRootAssetName);
+                GameObject goRoot = GameObject.Instantiate(loadedAssetRoot as GameObject);
+                GameObject.DestroyImmediate(goRoot);
+            }
+            swRoot.Stop();
+            standardToken = swRoot.Elapsed.Ticks / 100f;
+            var tokenRoot = standardToken;
+            tokenRoot = tokenRoot * (1000f / standardToken);
+            yield return null;
+            ++count;
+            EditorUtility.DisplayProgressBar(string.Format("檢測中...{0}% (同物件權重誤差約為30)", (((float)count * 100) / (float)total).ToString("f1")), "檢測物件 : " + _scrutinizer.targetPrefabRootAssetName, (float)count / (float)total);
+            CustomHierarchyView.performances.Put(_scrutinizer.prefabPathMap[_scrutinizer.prefabPaths.IndexOf(_scrutinizer.targetPrefabRootAssetName)], (int)tokenRoot);
+
+
+
+            foreach (string assetName in bundle.GetAllAssetNames())
+            {
+                if (assetName.Equals(_scrutinizer.targetPrefabRootAssetName)) continue;
+                System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+                sw.Start();
+
+                for (int i = 0; i < 100; ++i)
+                {
+                    var loadedAsset = bundle.LoadAsset<GameObject>(assetName);      
+                    GameObject go = GameObject.Instantiate(loadedAsset as GameObject);
+                    GameObject.DestroyImmediate(go);
+                }
+                sw.Stop();
+                float token = sw.Elapsed.Ticks / 100f ;
+
+                if (_scrutinizer.targetPrefabRoot == _scrutinizer.prefabPathMap[_scrutinizer.prefabPaths.IndexOf(assetName)])
+                { 
+                    standardToken = token;
+                }
+                token = token * (1000f / standardToken);
+                yield return null;
+                ++count;
+                EditorUtility.DisplayProgressBar(string.Format("檢測中...{0}% (同物件權重誤差約為30)", (((float)count * 100) / (float)total).ToString("f1")), "檢測物件 : " + assetName, (float)count / (float)total);
+
+                try
+                { 
+                    CustomHierarchyView.performances.Put(_scrutinizer.prefabPathMap[_scrutinizer.prefabPaths.IndexOf(assetName)], (int)token);
+                }
+                catch
+                {
+                    bundle.Unload(false);
+                    EditorUtility.ClearProgressBar();
+                    Resources.UnloadUnusedAssets();
+                }
+            }
+            bundle.Unload(false);
+            EditorUtility.ClearProgressBar();
+            Resources.UnloadUnusedAssets();
+            DestroyImmediate(_scrutinizer.gameObject);
+            System.IO.File.Delete("Assets/Prefab_Temporary_Detector");
         }
     }
 }
