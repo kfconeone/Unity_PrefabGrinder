@@ -32,7 +32,7 @@ namespace Kfc.Grinder
 
             prefab = request.asset as GameObject;
 
-            var prefabSwapperList = prefab.GetComponentsInChildren<AssetSwapper>();
+            var prefabSwapperList = prefab.GetComponentsInChildren<AssetSwapper>(true);
             var prefabNameList = prefabSwapperList.Select(tempSwapper => tempSwapper.prefabName).ToList();
             prefabsDic = new Dictionary<string, GameObject>();
             progress = 0;
@@ -56,7 +56,7 @@ namespace Kfc.Grinder
             yield return request;
 
             prefab = request.asset as GameObject;
-            var prefabSwapperList = prefab.GetComponentsInChildren<AssetSwapper>();
+            var prefabSwapperList = prefab.GetComponentsInChildren<AssetSwapper>(true);
             var prefabNameList = prefabSwapperList.Select(tempSwapper => tempSwapper.prefabName).ToList();
             prefabsDic = new Dictionary<string, GameObject>();
             progress = 0;
@@ -100,7 +100,7 @@ namespace Kfc.Grinder
         IEnumerator inner_Instantiate(GameObject _root, Dictionary<string, GameObject> _prefabsDic)
         {
 
-            var objectSwpapperList = _root.GetComponentsInChildren<AssetSwapper>();
+            var objectSwpapperList = _root.GetComponentsInChildren<AssetSwapper>(true);
             var objectDic = objectSwpapperList.Select(tempSwapper => tempSwapper).ToDictionary(tempSwapper => tempSwapper.prefabName, tempSwapper => tempSwapper.gameObject);
 
             List<Async<GameObject>> taskList = new List<Async<GameObject>>();
