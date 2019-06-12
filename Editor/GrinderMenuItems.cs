@@ -23,14 +23,14 @@ public class GrinderMenuItems : EditorWindow
         }
         GameObject selectedGameObject = Selection.gameObjects[0];
 
-        var prefabType = PrefabUtility.GetPrefabType(selectedGameObject);
-        if (prefabType != PrefabType.PrefabInstance)
+        var prefabType = PrefabUtility.GetPrefabAssetType(selectedGameObject);
+        if (prefabType == PrefabAssetType.NotAPrefab)
         {
             Debug.LogError("需先設定成 Prefab 物件");
             return;
         }
 
-        CustomHierarchyView.grinderPrefabs.Add(PrefabUtility.FindPrefabRoot(selectedGameObject));
+        CustomHierarchyView.grinderPrefabs.Add(PrefabUtility.GetOutermostPrefabInstanceRoot(selectedGameObject));
 
         Debug.Log("已設定成Grinder Prefab");
     }
@@ -72,7 +72,7 @@ public class GrinderMenuItems : EditorWindow
             Debug.Log("存在錯誤，取消建立");
             return;
         }
-        GameObject selectedPrefabRoot = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+        GameObject selectedPrefabRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(Selection.gameObjects[0]);
         Swing.Editor.EditorCoroutine.start(Grinding(selectedPrefabRoot));
 
     }
@@ -88,7 +88,7 @@ public class GrinderMenuItems : EditorWindow
             AssetDatabase.CreateFolder(PrefabPath, "Packed");
         }
 
-        PrefabUtility.CreatePrefab(PrefabPath + "/Origin/" + _selectedPrefabRoot.name + ".prefab", _selectedPrefabRoot);
+        PrefabUtility.SaveAsPrefabAsset(_selectedPrefabRoot, PrefabPath + "/Origin/" + _selectedPrefabRoot.name + ".prefab");
 
         GameObject tempGo = GameObject.Instantiate(_selectedPrefabRoot, _selectedPrefabRoot.transform.parent);
         tempGo.name = _selectedPrefabRoot.name;
@@ -108,7 +108,7 @@ public class GrinderMenuItems : EditorWindow
             GameObject swapGo = new GameObject(go.name);
             var swapper = swapGo.AddComponent<AssetSwapper>();
             swapper.prefabName = GetPrefabName(tempGo.transform, go.transform);
-            PrefabUtility.CreatePrefab(PrefabPath + "/Packed/" + swapper.prefabName + ".prefab", go);
+            PrefabUtility.SaveAsPrefabAsset(go, PrefabPath + "/Packed/" + swapper.prefabName + ".prefab");
             Debug.Log("建立prefab : " + swapper.prefabName + ".prefab");
             swapGo.transform.parent = go.transform.parent;
             swapGo.transform.SetSiblingIndex(go.transform.GetSiblingIndex());
@@ -119,7 +119,7 @@ public class GrinderMenuItems : EditorWindow
 
 
         }
-        PrefabUtility.CreatePrefab(PrefabPath + "/Packed/" + tempGo.name + ".prefab", tempGo);
+        PrefabUtility.SaveAsPrefabAsset(tempGo, PrefabPath + "/Packed/" + tempGo.name + ".prefab");
         UnityEngine.Object.DestroyImmediate(tempGo);
         EditorUtility.ClearProgressBar();
         Debug.Log("結束");
@@ -134,7 +134,7 @@ public class GrinderMenuItems : EditorWindow
             return;
         }
         GameObject selectedGameObject = Selection.gameObjects[0];
-        if (selectedGameObject.GetComponentsInChildren<AssetSwapper>().Length == 0 && !CustomHierarchyView.grinderPrefabs.Contains(PrefabUtility.FindPrefabRoot(selectedGameObject)))
+        if (selectedGameObject.GetComponentsInChildren<AssetSwapper>().Length == 0 && !CustomHierarchyView.grinderPrefabs.Contains(PrefabUtility.GetOutermostPrefabInstanceRoot(selectedGameObject)))
         {
             Debug.Log("並非是Grinder物件");
             return;
@@ -142,15 +142,15 @@ public class GrinderMenuItems : EditorWindow
 
         if (EditorUtility.DisplayDialog("還原成普通Prefab", "是否還原？(不可逆)", "確定", "取消"))
         {
-            var components = PrefabUtility.FindPrefabRoot(selectedGameObject).GetComponentsInChildren(typeof(AssetSwapper), true);
+            var components = PrefabUtility.GetOutermostPrefabInstanceRoot(selectedGameObject).GetComponentsInChildren(typeof(AssetSwapper), true);
             foreach (Component com in components)
             {
                 GameObject.DestroyImmediate(com);
             }
 
-            if (CustomHierarchyView.grinderPrefabs.Contains(PrefabUtility.FindPrefabRoot(selectedGameObject)))
+            if (CustomHierarchyView.grinderPrefabs.Contains(PrefabUtility.GetOutermostPrefabInstanceRoot(selectedGameObject)))
             {
-                CustomHierarchyView.grinderPrefabs.Remove(PrefabUtility.FindPrefabRoot(selectedGameObject));
+                CustomHierarchyView.grinderPrefabs.Remove(PrefabUtility.GetOutermostPrefabInstanceRoot(selectedGameObject));
             }
 
             Debug.Log("還原完畢");
@@ -195,7 +195,7 @@ public class GrinderMenuItems : EditorWindow
             Debug.Log("未選取物件");
             return;
         }
-        GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+        GameObject targetPrefab = PrefabUtility.GetOutermostPrefabInstanceRoot(Selection.gameObjects[0]);
 
         if (EditorUtility.DisplayDialog("深度性能檢測", "深度測試非常耗時，確定進行？", "確定", "取消"))
         {
@@ -216,7 +216,7 @@ public class GrinderMenuItems : EditorWindow
             Debug.Log("未選取物件");
             return;
         }
-        GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+        GameObject targetPrefab = PrefabUtility.GetOutermostPrefabInstanceRoot(Selection.gameObjects[0]);
 
         if (EditorUtility.DisplayDialog("生成性能檢測", "檢測時間根據prefab大小，有可能需要數分鐘，確定進行？", "確定", "取消"))
         {
@@ -236,7 +236,8 @@ public class GrinderMenuItems : EditorWindow
             Debug.Log("未選取物件");
             return;
         }
-        GameObject targetPrefab = PrefabUtility.FindPrefabRoot(Selection.gameObjects[0]);
+
+        GameObject targetPrefab = PrefabUtility.GetOutermostPrefabInstanceRoot(Selection.gameObjects[0]);
 
         if (EditorUtility.DisplayDialog("操作性能檢測", "檢測時間根據prefab大小，有可能需要數分鐘，確定進行？", "確定", "取消"))
         {
@@ -538,7 +539,7 @@ public class GrinderMenuItems : EditorWindow
         static IEnumerator Download(Scrutinizer _scrutinizer,string _url)
         {
             
-            var www = UnityWebRequest.GetAssetBundle(_url);
+            var www = UnityWebRequestAssetBundle.GetAssetBundle(_url);
 
             yield return www.SendWebRequest();
             DownloadHandlerAssetBundle tempAsset = (DownloadHandlerAssetBundle)www.downloadHandler;

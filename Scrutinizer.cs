@@ -65,7 +65,7 @@ public class Scrutinizer : MonoBehaviour {
                     
                 }
                 
-                GameObject tempPrefab = PrefabUtility.CreatePrefab(path + "/Resources/" + prefabName + ".prefab", trans.gameObject);
+                GameObject tempPrefab = PrefabUtility.SaveAsPrefabAsset(trans.gameObject, path + "/Resources/" + prefabName + ".prefab");
                 string assetPath = AssetDatabase.GetAssetPath(tempPrefab);
                 if (trans.gameObject == targetPrefabRoot)
                 {

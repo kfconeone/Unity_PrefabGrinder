@@ -42,10 +42,10 @@ public class CustomHierarchyView {
         }
         else
         {
-            var prefabType = PrefabUtility.GetPrefabType(hierarchyGameObject);
-            if (prefabType == PrefabType.PrefabInstance)    
+            var prefabType = PrefabUtility.GetPrefabAssetType(hierarchyGameObject);
+            if (prefabType != PrefabAssetType.NotAPrefab)    
             {
-                if (PrefabUtility.FindPrefabRoot(hierarchyGameObject).GetComponentInChildren<AssetSwapper>(true) == null && !grinderPrefabs.Contains(PrefabUtility.FindPrefabRoot(hierarchyGameObject))) return;
+                if (PrefabUtility.GetOutermostPrefabInstanceRoot(hierarchyGameObject).GetComponentInChildren<AssetSwapper>(true) == null && !grinderPrefabs.Contains(PrefabUtility.GetOutermostPrefabInstanceRoot(hierarchyGameObject))) return;
                 #region 這段是著色背景
                 //一定要先著色背景，不然字會消失
                 //if (hierarchyGameObject.GetComponent<AssetSwapper>() != null)
@@ -74,7 +74,7 @@ public class CustomHierarchyView {
                 {
                     fontColor = new Color(71f / 255f, 129f / 255f, 28f / 255f, 1.0f);
                 }
-                Rect offsetRect = new Rect(selectionRect.position + new Vector2(0, 2), selectionRect.size);
+                Rect offsetRect = new Rect(selectionRect.position + new Vector2(18, 2), selectionRect.size);
                 string name;
                 if (performances.ContainsKey(hierarchyGameObject))
                 {
@@ -91,6 +91,7 @@ public class CustomHierarchyView {
                     name = hierarchyGameObject.name;
                 }
 
+                
                 EditorGUI.LabelField(offsetRect, name, new GUIStyle()
                 {
                     normal = new GUIStyleState() { textColor = fontColor }
@@ -142,7 +143,7 @@ public class CustomHierarchyView {
                 {
 
                     //根物件不允許出現toggle
-                    if (!PrefabUtility.FindPrefabRoot(hierarchyGameObject).Equals(hierarchyGameObject))
+                    if (!PrefabUtility.GetOutermostPrefabInstanceRoot(hierarchyGameObject).Equals(hierarchyGameObject))
                     {
                         //要上下都沒有assetSwapper才會出現toggle
                         if (hierarchyGameObject.GetComponentsInChildren<AssetSwapper>(true).Length == 0 &&
@@ -171,7 +172,7 @@ public class CustomHierarchyView {
                     arrowDownRect.width = 15;            //寬
                     arrowDownRect.height = arrowDownRect.height - 2;  //高     
                     arrowDownTextureStyle.normal.background = arrowDownTexture;
-                    if (PrefabUtility.FindPrefabRoot(hierarchyGameObject).Equals(hierarchyGameObject))
+                    if (PrefabUtility.GetOutermostPrefabInstanceRoot(hierarchyGameObject).Equals(hierarchyGameObject))
                     {
                         arrowDownTextureStyle.normal.background = rootTexture;
                     }

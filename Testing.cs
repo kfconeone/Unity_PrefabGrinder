@@ -41,7 +41,7 @@ public class Testing : MonoBehaviour {
     private IEnumerator DownloadWebBundle_Old(string _url)
     {
         //以下是下載
-        var www = UnityWebRequest.GetAssetBundle(_url);
+        var www = UnityWebRequestAssetBundle.GetAssetBundle(_url);
         yield return www.SendWebRequest();
         DownloadHandlerAssetBundle tempAsset = (DownloadHandlerAssetBundle)www.downloadHandler;
         AssetBundle bundle = tempAsset.assetBundle;

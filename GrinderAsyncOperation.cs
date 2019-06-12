@@ -13,6 +13,7 @@ namespace Kfc.Grinder
         public bool isDone;
         public float progress;
 
+
         public GrinderAssetBundleAsyncOperation LoadAssetAsync(MonoBehaviour _mono, string _assetName, AssetBundle _bundle)
         {
             _mono.StartCoroutine(inner_LoadAssetAsync(_assetName, _bundle));
